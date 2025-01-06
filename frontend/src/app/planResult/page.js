@@ -6,11 +6,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { useSearchParams } from "next/navigation";
 import LoadingScreen from "@/components/LoadingScreen";
 import DestinationCard from "@/components/DestinationCard";
-import HomeButton from "@/components/HomeButton";
 
-/**
- * 🔹 PlanResultContent 컴포넌트 (실제 로직 포함)
- */
 function PlanResultContent() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -18,11 +14,8 @@ function PlanResultContent() {
   const searchParams = useSearchParams();
   const documentId = searchParams?.get("id");
 
-  /**
-   * Firestore에서 사용자 데이터 가져오기
-   */
   useEffect(() => {
-    const fetchUserData = async () => {
+    const fetchData = async () => {
       if (!documentId) {
         console.warn("No document ID found in the URL.");
         setLoading(false);
@@ -30,67 +23,55 @@ function PlanResultContent() {
       }
 
       try {
-        const docRef = doc(db, "user_selections", documentId);
-        const docSnap = await getDoc(docRef);
+        const fetchUserData = async () => {
+          const docRef = doc(db, "user_selections", documentId);
+          const docSnap = await getDoc(docRef);
 
-        if (docSnap.exists()) {
-          setUserData(docSnap.data());
-        } else {
-          console.warn("No document found with the provided ID.");
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-      }
-    };
-
-    fetchUserData();
-  }, [documentId]);
-
-  /**
-   * AI API에서 결과 가져오기
-   */
-  useEffect(() => {
-    const fetchAIResult = async () => {
-      if (!documentId) return;
-
-      try {
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/chat` || "http://localhost:3001/api/chat",
-          {
-            method: "POST",
-            mode: 'cors',
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ docID: documentId }),
+          if (docSnap.exists()) {
+            setUserData(docSnap.data());
+          } else {
+            console.warn("No document found with the provided ID.");
           }
-        );
+        };
 
-        if (!response.ok) {
-          throw new Error(`Failed to fetch result: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-
-        let parsedResult;
-        try {
-          parsedResult = JSON.parse(
-            data.result.replace(/^```json/, "").replace(/```$/, "").trim()
+        const fetchAIResult = async () => {
+          const response = await fetch(
+            "https://hackathon-glnw.onrender.com/api/chat",
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ docID: documentId }),
+            }
           );
-          setResult(parsedResult);
-        } catch (parseError) {
-          console.error("Error parsing JSON:", parseError);
-          setResult([]);
-        }
+
+          if (!response.ok) {
+            throw new Error(`Failed to fetch result: ${response.statusText}`);
+          }
+
+          const data = await response.json();
+
+          try {
+            const parsedResult = JSON.parse(
+              data.result.replace(/^```json/, "").replace(/```$/, "").trim()
+            );
+            setResult(parsedResult);
+          } catch (parseError) {
+            console.error("Error parsing JSON:", parseError);
+            setResult([]);
+          }
+        };
+
+        await Promise.all([fetchUserData(), fetchAIResult()]);
       } catch (error) {
-        console.error("Error fetching AI result:", error);
-        setResult([]);
+        console.error("Error fetching data:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchAIResult();
+    fetchData();
   }, [documentId]);
 
   if (loading) {
@@ -118,13 +99,10 @@ function PlanResultContent() {
           />
         ))}
       </div>
-          </div>
+    </div>
   );
 }
 
-/**
- * 🔹 Suspense로 PlanResultContent 감싸기
- */
 export default function PlanResult() {
   return (
     <Suspense fallback={<LoadingScreen />}>
